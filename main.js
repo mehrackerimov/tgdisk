@@ -22,6 +22,19 @@ const rl = readline.createInterface({
 
 let stringSession = new StringSession("");
 
+function formatSize(bytes) {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let size = bytes;
+    let unit = 0;
+
+    while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit++;
+    }
+
+    return `${size.toFixed(1)} ${units[unit]}`;
+}
+
 async function upload_file(filePath) {
     if (!fs.existsSync(filePath)) {
         return console.log("[ERROR] File not found.");
@@ -91,15 +104,14 @@ function prompt() {
         const args = command.trim().split(" ");
         const cmd = args.shift()?.toLowerCase();
 
+        const db = await JSONFilePreset("db.json", {
+            files: []
+        });
+
         switch (cmd) {
             case "upload":
                 const filePath = args.join(" ");
                 const upload_data = await upload_file(filePath);
-                
-                const db = await JSONFilePreset("db.json", {
-                    files: []
-                });
-
 
                 if (upload_data) {
                     db.data.files.push(upload_data);
@@ -113,11 +125,9 @@ function prompt() {
                 break;
 
             case "list":
-                const files = await db.getData("/files/");
 
-                for (let index = 0; index < files.length; index++) {
-                    const file = files[index];
-                    console.log(file)
+                for (const file of db.data.files) {
+                    console.log(`| ${file.name.padEnd(30)} | ${formatSize(file.size).padStart(10)} |`);
                 }
 
                 break;
