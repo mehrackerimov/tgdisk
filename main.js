@@ -107,10 +107,10 @@ async function handleCommand(command) {
     switch (cmd) {
         case "upload": {
             const { filePath, description } = parseUploadArguments(argumentText);
-            const defaultDirectory = localDirectoryToVirtualPath(filePath);
+            const defaultDirectory = currentDirectory === "/" ? localDirectoryToVirtualPath(filePath) : currentDirectory;
             const destinationInput = await ask(paint.dim(`  Destination folder [${defaultDirectory}]: `));
             const destinationDirectory = normalizeVirtualPath(destinationInput || defaultDirectory, currentDirectory);
-            let latestProgress = -10;
+            let latestProgress = 0;
             const entry = await uploadFile({
                 client,
                 filePath,
@@ -118,7 +118,7 @@ async function handleCommand(command) {
                 description,
                 onStage: (stage) => console.log(paint.cyan(`› ${stage}...`)),
                 onProgress: (percent) => {
-                    if (percent === 100 || percent - latestProgress >= 10) {
+                    if (percent > 0 && (percent === 100 || percent - latestProgress >= 10)) {
                         latestProgress = percent;
                         process.stdout.write(`\r${paint.dim(`  Upload: ${String(percent).padStart(3)}%`)}`);
                     }
