@@ -79,11 +79,11 @@ test("rejects unsafe names and refuses to overwrite files", async (t) => {
     await assert.rejects(() => downloadFile({
         client: makeClient(new Map([[1, encrypted]])), key, destinationDirectory: destination,
         fileEntry: { name: "existing.txt", encryptionFormat: ENCRYPTION_FORMAT, parts: [{ part: 0, messageId: 1 }] }
-    }), /zaten var/);
+    }), /already exists/);
     await assert.rejects(() => downloadFile({
         client: makeClient(new Map([[1, encrypted]])), key, destinationDirectory: destination,
         fileEntry: { name: "..", encryptionFormat: ENCRYPTION_FORMAT, parts: [{ part: 0, messageId: 1 }] }
-    }), /geçerli bir ad/);
+    }), /valid name/);
     assert.equal(await fs.readFile(path.join(destination, "existing.txt"), "utf8"), "keep this");
 });
 
@@ -91,5 +91,5 @@ test("rejects legacy records that cannot be decrypted safely", async () => {
     await assert.rejects(() => downloadFile({
         client: makeClient(new Map()), key: crypto.randomBytes(32),
         fileEntry: { name: "legacy.txt", parts: [{ part: 0, messageId: 1 }] }
-    }), /eksik şifreleme metadatası/);
+    }), /missing encryption metadata/);
 });

@@ -28,6 +28,7 @@ test("creates a self-contained encrypted upload that can be authenticated and re
         },
         filePath: source,
         key,
+        description: "A test archive",
         onStage: (stage) => stages.push(stage)
     });
 
@@ -39,6 +40,7 @@ test("creates a self-contained encrypted upload that can be authenticated and re
 
     assert.deepEqual(zlib.gunzipSync(compressed), original);
     assert.equal(entry.encryptionFormat, ENCRYPTION_FORMAT);
+    assert.equal(entry.description, "A test archive");
     assert.equal(entry.parts[0].messageId, 42);
-    assert.deepEqual(stages, ["Dosya sıkıştırılıyor", "Dosya şifreleniyor", "Telegram'a yükleniyor"]);
+    assert.deepEqual(stages, ["Compressing file", "Encrypting file", "Uploading to Telegram"]);
 });
