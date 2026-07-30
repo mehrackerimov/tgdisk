@@ -11,6 +11,8 @@ const { downloadFile } = require("./lib/download");
 const { directoryExists, ensureDirectory, listDirectory, localDirectoryToVirtualPath, normalizeVirtualPath, removeEmptyDirectory } = require("./lib/filesystem");
 const { collectFiles, uploadDirectory } = require("./lib/folder-upload");
 const { uploadFile } = require("./lib/upload");
+const { createCommandService } = require("./lib/command-service");
+const { startWebSocketServer } = require("./lib/websocket-server");
 
 dotenv.config({ quiet: true });
 
@@ -274,6 +276,19 @@ function prompt() {
     });
     startupDatabase.data.session = client.session.save();
     await startupDatabase.write();
+    const websocketFlag = process.argv.indexOf("--ws");
+    if (websocketFlag !== -1) {
+        const requestedPort = process.argv[websocketFlag + 1];
+        const port = requestedPort && /^\d+$/.test(requestedPort) ? Number(requestedPort) : 8787;
+        if (port < 1 || port > 65535) throw new Error("WebSocket port must be between 1 and 65535.");
+        startWebSocketServer({
+            port,
+            createSession: () => createCommandService({ client, key, getDatabase })
+        });
+        rl.close();
+        console.log(`TGDisk WebSocket server listening on ws://127.0.0.1:${port}`);
+        return;
+    }
     showBanner();
     prompt();
 })().catch((error) => {

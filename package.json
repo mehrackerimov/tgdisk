@@ -17,6 +17,7 @@
   "bin": "main.js",
   "scripts": {
     "start": "node main.js",
+    "start:ws": "node main.js --ws",
     "test": "node --test",
     "build:win": "pkg . --targets node24-win-x64 --output dist/tgdisk.exe"
   },
@@ -24,7 +25,8 @@
     "dotenv": "^17.4.2",
     "lowdb": "^7.0.1",
     "readline": "^1.3.0",
-    "telegram": "^2.26.22"
+    "telegram": "^2.26.22",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@yao-pkg/pkg": "6.21.0"

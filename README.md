@@ -123,6 +123,24 @@ list 1
 list 2
 ```
 
+## UI-ready WebSocket mode
+
+TGDisk can also expose the same archive commands through a local WebSocket server. This is intended for a future desktop or web UI; it stays bound to `127.0.0.1`, so it is not reachable from other devices by default.
+
+```bash
+npm run start:ws
+# or choose a port:
+node main.js --ws 9000
+```
+
+Connect to `ws://127.0.0.1:8787` (or the port you choose). Send a command as JSON:
+
+```json
+{ "type": "command", "id": "request-1", "command": "ls" }
+```
+
+The server returns `ready`, `event`, `prompt`, and `result` messages. `prompt` is used for destination-folder and destructive-action confirmations; reply with `{ "type": "answer", "requestId": "...", "value": "..." }`. Command results are structured JSON, making it possible for a UI to render folders, files, progress, and errors without parsing terminal output. Operations are serialized across connected clients to protect the archive database.
+
 ## Storage Format and Multipart Files
 
 For each upload, TGDisk creates this encrypted payload structure:
