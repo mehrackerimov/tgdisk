@@ -9,6 +9,7 @@ const { pipeline } = require("stream/promises");
 const path = require("path");
 const crypto = require("crypto");
 const { JSONFilePreset } = require("lowdb/node")
+const { downloadFile, ENCRYPTION_FORMAT } = require("./lib/download");
 
 dotenv.config();
 
@@ -64,13 +65,16 @@ async function upload_file(filePath) {
         iv
     );
 
+    fs.writeFileSync(encryptedPath, iv);
+
     await pipeline(
         fs.createReadStream(compressedPath),
         cipher,
-        fs.createWriteStream(encryptedPath)
+        fs.createWriteStream(encryptedPath, { flags: 'a' })
     );
 
     const authTag = cipher.getAuthTag();
+    fs.appendFileSync(encryptedPath, authTag);
 
     console.log("[INFO] Encryption completed.");
 
@@ -92,9 +96,10 @@ async function upload_file(filePath) {
         name: path.basename(filePath),
         size: stats.size,
         compressed: true,
-        algorithm: "zstd",
+        compression: "gzip",
         encrypted: true,
         cipher: "aes-256-gcm",
+        encryptionFormat: ENCRYPTION_FORMAT,
         parts
     };
 }
@@ -121,13 +126,30 @@ function prompt() {
                 break;
 
             case "download":
-                console.log("Download:", args.join(" "));
+                try {
+                    if (!/^\d+$/.test(args[0] || "")) {
+                        throw new Error("Geçerli bir dosya ID'si girin.");
+                    }
+                    const fileEntry = db.data.files[Number(args[0])];
+                    if (!fileEntry) {
+                        throw new Error("Dosya bulunamadı.");
+                    }
+                    const outputPath = await downloadFile({
+                        client: global.client,
+                        fileEntry,
+                        key,
+                        onProgress: (current, total) => console.log(`[INFO] Parça indirildi: ${current}/${total}`)
+                    });
+                    console.log(`[INFO] İndirildi: ${outputPath}`);
+                } catch (e) {
+                    console.error(`[ERROR] İndirme başarısız: ${e.message}`);
+                }
                 break;
 
             case "list":
 
                 for (const file of db.data.files) {
-                    console.log(`| ${file.name.padEnd(30)} | ${formatSize(file.size).padStart(10)} |`);
+                    console.log(`ID: ${db.data.files.indexOf(file)} | ${file.name.padEnd(30)} | ${formatSize(file.size).padStart(10)} |`);
                 }
 
                 break;

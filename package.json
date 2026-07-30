@@ -15,7 +15,7 @@
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
-    "test": "nodemon main.js"
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
