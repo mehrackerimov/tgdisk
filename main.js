@@ -9,6 +9,7 @@ const { Logger, TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 const { parseUploadArguments } = require("./lib/command");
 const { downloadFile } = require("./lib/download");
+const { directoryExists, ensureDirectory, listDirectory, localDirectoryToVirtualPath, normalizeVirtualPath } = require("./lib/filesystem");
 const { uploadFile } = require("./lib/upload");
 
 dotenv.config({ quiet: true });
@@ -16,6 +17,7 @@ dotenv.config({ quiet: true });
 const key = crypto.scryptSync(process.env.MASTER_PASSWORD, "tgdisk", 32);
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 let client;
+let currentDirectory = "/";
 const PAGE_SIZE = 50;
 
 const paint = {
@@ -68,8 +70,31 @@ function showFiles(files, page) {
     console.log(paint.dim(`\n  Use list <page> to browse the archive.\n`));
 }
 
+function showDirectory(database, directoryPath) {
+    const { folders, files } = listDirectory(database, directoryPath);
+    console.log(paint.cyan(`\n  ${directoryPath}`));
+    if (folders.length === 0 && files.length === 0) {
+        console.log(paint.dim("  This folder is empty.\n"));
+        return;
+    }
+    for (const folder of folders) console.log(paint.cyan(`  [DIR]  ${path.posix.basename(folder)}`));
+    for (const file of files) {
+        const description = file.description ? paint.dim(` — ${shorten(file.description, 60)}`) : "";
+        const fileId = database.data.files.indexOf(file);
+        console.log(`  [FILE] ${String(fileId).padStart(4)}  ${file.name} ${paint.dim(`(${formatSize(file.size)})`)}${description}`);
+    }
+    console.log();
+}
+
 async function getDatabase() {
-    return JSONFilePreset("db.json", { files: [] });
+    const database = await JSONFilePreset("db.json", { files: [], directories: [] });
+    database.data.files ||= [];
+    database.data.directories ||= [];
+    return database;
+}
+
+function ask(question) {
+    return new Promise((resolve) => rl.question(question, resolve));
 }
 
 async function handleCommand(command) {
@@ -82,6 +107,9 @@ async function handleCommand(command) {
     switch (cmd) {
         case "upload": {
             const { filePath, description } = parseUploadArguments(argumentText);
+            const defaultDirectory = localDirectoryToVirtualPath(filePath);
+            const destinationInput = await ask(paint.dim(`  Destination folder [${defaultDirectory}]: `));
+            const destinationDirectory = normalizeVirtualPath(destinationInput || defaultDirectory, currentDirectory);
             let latestProgress = -10;
             const entry = await uploadFile({
                 client,
@@ -97,9 +125,10 @@ async function handleCommand(command) {
                 }
             });
             process.stdout.write("\n");
+            entry.virtualPath = ensureDirectory(db, destinationDirectory);
             db.data.files.push(entry);
             await db.write();
-            console.log(paint.green(`✓ Uploaded and added to the archive: ${entry.name} (${formatSize(entry.size)})`));
+            console.log(paint.green(`✓ Uploaded to ${entry.virtualPath}: ${entry.name} (${formatSize(entry.size)})`));
             break;
         }
         case "download": {
@@ -121,8 +150,32 @@ async function handleCommand(command) {
             if (argumentText && !/^\d+$/.test(argumentText)) throw new Error("Usage: list [page]");
             showFiles(db.data.files, Number(argumentText || 1));
             break;
+        case "ls": {
+            const target = normalizeVirtualPath(argumentText || ".", currentDirectory);
+            if (!directoryExists(db, target)) throw new Error(`Directory does not exist: ${target}`);
+            showDirectory(db, target);
+            break;
+        }
+        case "cd": {
+            if (!argumentText) throw new Error("Usage: cd <directory>");
+            const target = normalizeVirtualPath(argumentText, currentDirectory);
+            if (!directoryExists(db, target)) throw new Error(`Directory does not exist: ${target}`);
+            currentDirectory = target;
+            break;
+        }
+        case "pwd":
+            console.log(currentDirectory);
+            break;
+        case "mkdir": {
+            if (!argumentText) throw new Error("Usage: mkdir <directory>");
+            const target = normalizeVirtualPath(argumentText, currentDirectory);
+            ensureDirectory(db, target);
+            await db.write();
+            console.log(paint.green(`✓ Directory created: ${target}`));
+            break;
+        }
         case "help":
-            console.log("\n  upload <path> [--description <text>]  Upload a file\n  download <id>                          Download a file\n  list [page]                            Browse archive pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  upload C:\\Backups\\my    spaced    file.zip\n");
+            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
             break;
         case "exit":
         case "quit":
