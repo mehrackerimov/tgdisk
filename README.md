@@ -4,6 +4,8 @@ TGDisk is a command-line personal archive that stores files in your Telegram **S
 
 It behaves like a small virtual disk: create archive folders, move between them with `cd`, inspect them with `ls`, attach optional file descriptions, and download or permanently remove files when needed. Archive metadata, including virtual paths and Telegram message IDs, is stored locally in `db.json`.
 
+![TGDisk command-line interface](screenshots/screenshot.png)
+
 > [!WARNING]
 > Keep both your `MASTER_PASSWORD` and `db.json` safe. The password is required to decrypt files, and `db.json` maps archive records to the Telegram messages that contain their encrypted data. Do not commit either file to a public repository.
 

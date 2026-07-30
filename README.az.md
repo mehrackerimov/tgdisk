@@ -4,6 +4,8 @@ TGDisk faylları Telegram-dakı **Saved Messages** bölməsində saxlayan komand
 
 Proqram kiçik virtual disk kimi işləyir: arxiv qovluqları yarada, `cd` ilə onlar arasında gəzə, `ls` ilə məzmunu görə, fayllara açıqlama əlavə edə, onları endirə və ya tam silə bilərsiniz. Virtual yollar, Telegram mesaj ID-ləri və sessiya lokal `db.json` faylında saxlanır.
 
+![TGDisk komanda sətri interfeysi](screenshots/screenshot.png)
+
 > [!WARNING]
 > `MASTER_PASSWORD` və `db.json` faylını təhlükəsiz saxlayın. Şifrə faylları açmaq üçün, `db.json` isə arxiv qeydlərini Telegram mesajları ilə əlaqələndirmək üçün lazımdır. Bunları açıq repozitoriyaya əlavə etməyin.
 
