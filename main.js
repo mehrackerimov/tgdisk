@@ -88,7 +88,7 @@ function showDirectory(database, directoryPath) {
 }
 
 async function getDatabase() {
-    const database = await JSONFilePreset("db.json", { files: [], directories: [] });
+    const database = await JSONFilePreset("db.json", { files: [], directories: [], session: "" });
     database.data.files ||= [];
     database.data.directories ||= [];
     return database;
@@ -233,8 +233,14 @@ function prompt() {
 }
 
 (async () => {
-    if (!fs.existsSync("session.txt")) await fsp.writeFile("session.txt", "");
-    const session = new StringSession(await fsp.readFile("session.txt", "utf8"));
+    const startupDatabase = await getDatabase();
+    let savedSession = startupDatabase.data.session || "";
+    let migratedLegacySession = false;
+    if (!savedSession && fs.existsSync("session.txt")) {
+        savedSession = await fsp.readFile("session.txt", "utf8");
+        migratedLegacySession = true;
+    }
+    const session = new StringSession(savedSession);
     client = new TelegramClient(session, Number(process.env.APP_ID), process.env.API_HASH, {
         connectionRetries: 5,
         baseLogger: new Logger("none")
@@ -245,7 +251,9 @@ function prompt() {
         password: () => new Promise((resolve) => rl.question("Two-factor password: ", resolve)),
         phoneCode: () => new Promise((resolve) => rl.question("Telegram code: ", resolve))
     });
-    await fsp.writeFile("session.txt", client.session.save());
+    startupDatabase.data.session = client.session.save();
+    await startupDatabase.write();
+    if (migratedLegacySession) await fsp.rm("session.txt", { force: true });
     showBanner();
     prompt();
 })().catch((error) => {

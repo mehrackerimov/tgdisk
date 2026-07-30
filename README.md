@@ -64,7 +64,7 @@ It behaves like a small virtual disk: create archive folders, move between them 
    node main.js
    ```
 
-On the first launch, TGDisk asks for your Telegram phone number and login code. If you enabled Telegram two-step verification, it also asks for that password. A local `session.txt` file is then created so you normally do not have to sign in again.
+On the first launch, TGDisk asks for your Telegram phone number and login code. If you enabled Telegram two-step verification, it also asks for that password. The reusable Telegram session is stored in `db.json`, so you normally do not have to sign in again. Existing `session.txt` files are migrated automatically and removed after a successful launch.
 
 ## Getting Telegram API Credentials
 
@@ -135,10 +135,36 @@ Encrypted payloads larger than 200 MB are split into sequential Telegram documen
 ## Data Files
 
 - `.env` — local API credentials and encryption password. Keep private.
-- `session.txt` — reusable Telegram login session. Keep private.
-- `db.json` — archive metadata: filenames, virtual paths, descriptions, and Telegram message IDs. Back it up securely.
+- `session.txt` — legacy session file only. It is automatically migrated to `db.json` and removed after the next successful launch.
+- `db.json` — archive metadata, virtual filesystem, Telegram message IDs, and the reusable Telegram session. Back it up securely.
 
-The project ignores these files through `.gitignore`. Losing `db.json` does not delete Telegram data, but it removes the local index required to find and restore it.
+The project ignores these files through `.gitignore`. Losing `db.json` does not delete Telegram data, but it removes the local index and session required to find and restore it.
+
+## Build a Windows Executable
+
+TGDisk can be packaged as a standalone Windows executable, so end users do not need to install Node.js. The build uses a Node.js 20 Windows runtime bundled by `@yao-pkg/pkg`.
+
+1. Install the project dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Create the executable:
+
+   ```bash
+   npm run build:win
+   ```
+
+3. The executable is created at:
+
+   ```text
+   dist\tgdisk.exe
+   ```
+
+Place `.env` next to `tgdisk.exe` before the first run. TGDisk will create `db.json` beside the executable after you sign in. Keep that database file private and back it up securely; it includes both your archive index and reusable Telegram session.
+
+The first build can take longer because the packager may need to download or prepare its Windows Node.js runtime. Later builds reuse its local cache.
 
 ## Testing
 
