@@ -8,8 +8,9 @@ const readline = require("node:readline");
 const { Logger, TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 const { parseUploadArguments } = require("./lib/command");
+const { deleteArchiveFile } = require("./lib/delete");
 const { downloadFile } = require("./lib/download");
-const { directoryExists, ensureDirectory, listDirectory, localDirectoryToVirtualPath, normalizeVirtualPath } = require("./lib/filesystem");
+const { directoryExists, ensureDirectory, listDirectory, localDirectoryToVirtualPath, normalizeVirtualPath, removeEmptyDirectory } = require("./lib/filesystem");
 const { uploadFile } = require("./lib/upload");
 
 dotenv.config({ quiet: true });
@@ -174,8 +175,37 @@ async function handleCommand(command) {
             console.log(paint.green(`✓ Directory created: ${target}`));
             break;
         }
+        case "rm": {
+            if (!/^\d+$/.test(argumentText)) throw new Error("Usage: rm <file-id>");
+            const fileId = Number(argumentText);
+            const file = db.data.files[fileId];
+            if (!file) throw new Error("No file exists with this ID.");
+            const answer = await ask(paint.yellow(`  Permanently delete '${file.name}' from Telegram and the archive? [y/N]: `));
+            if (answer.trim().toLowerCase() !== "y") {
+                console.log(paint.dim("Deletion cancelled."));
+                break;
+            }
+            await deleteArchiveFile({ client, database: db, fileId });
+            await db.write();
+            console.log(paint.green(`✓ Deleted: ${file.name}`));
+            break;
+        }
+        case "rmdir": {
+            if (!argumentText) throw new Error("Usage: rmdir <directory>");
+            const target = normalizeVirtualPath(argumentText, currentDirectory);
+            const answer = await ask(paint.yellow(`  Delete empty directory '${target}'? [y/N]: `));
+            if (answer.trim().toLowerCase() !== "y") {
+                console.log(paint.dim("Deletion cancelled."));
+                break;
+            }
+            removeEmptyDirectory(db, target);
+            await db.write();
+            if (currentDirectory === target) currentDirectory = "/";
+            console.log(paint.green(`✓ Directory deleted: ${target}`));
+            break;
+        }
         case "help":
-            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
+            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  rmdir <directory>                      Delete an empty archive directory\n  rm <file-id>                           Permanently delete a file and its Telegram parts\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
             break;
         case "exit":
         case "quit":
