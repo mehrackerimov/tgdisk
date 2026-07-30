@@ -64,7 +64,7 @@ It behaves like a small virtual disk: create archive folders, move between them 
    node main.js
    ```
 
-On the first launch, TGDisk asks for your Telegram phone number and login code. If you enabled Telegram two-step verification, it also asks for that password. The reusable Telegram session is stored in `db.json`, so you normally do not have to sign in again. Existing `session.txt` files are migrated automatically and removed after a successful launch.
+On the first launch, TGDisk asks for your Telegram phone number and login code. If you enabled Telegram two-step verification, it also asks for that password. The reusable Telegram session is stored in `db.json`, so you normally do not have to sign in again.
 
 ## Getting Telegram API Credentials
 
@@ -135,14 +135,13 @@ Encrypted payloads larger than 200 MB are split into sequential Telegram documen
 ## Data Files
 
 - `.env` — local API credentials and encryption password. Keep private.
-- `session.txt` — legacy session file only. It is automatically migrated to `db.json` and removed after the next successful launch.
 - `db.json` — archive metadata, virtual filesystem, Telegram message IDs, and the reusable Telegram session. Back it up securely.
 
 The project ignores these files through `.gitignore`. Losing `db.json` does not delete Telegram data, but it removes the local index and session required to find and restore it.
 
 ## Build a Windows Executable
 
-TGDisk can be packaged as a standalone Windows executable, so end users do not need to install Node.js. The build uses a Node.js 20 Windows runtime bundled by `@yao-pkg/pkg`.
+TGDisk can be packaged as a standalone Windows executable, so end users do not need to install Node.js. The build uses a Node.js 24 Windows runtime bundled by `@yao-pkg/pkg` version 6.21.0.
 
 1. Install the project dependencies:
 

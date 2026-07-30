@@ -1,7 +1,5 @@
 const crypto = require("node:crypto");
 const dotenv = require("dotenv");
-const fs = require("node:fs");
-const fsp = require("node:fs/promises");
 const { JSONFilePreset } = require("lowdb/node");
 const path = require("node:path");
 const readline = require("node:readline");
@@ -234,13 +232,7 @@ function prompt() {
 
 (async () => {
     const startupDatabase = await getDatabase();
-    let savedSession = startupDatabase.data.session || "";
-    let migratedLegacySession = false;
-    if (!savedSession && fs.existsSync("session.txt")) {
-        savedSession = await fsp.readFile("session.txt", "utf8");
-        migratedLegacySession = true;
-    }
-    const session = new StringSession(savedSession);
+    const session = new StringSession(startupDatabase.data.session || "");
     client = new TelegramClient(session, Number(process.env.APP_ID), process.env.API_HASH, {
         connectionRetries: 5,
         baseLogger: new Logger("none")
@@ -253,7 +245,6 @@ function prompt() {
     });
     startupDatabase.data.session = client.session.save();
     await startupDatabase.write();
-    if (migratedLegacySession) await fsp.rm("session.txt", { force: true });
     showBanner();
     prompt();
 })().catch((error) => {
