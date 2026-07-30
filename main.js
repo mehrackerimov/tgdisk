@@ -9,6 +9,7 @@ const { parseUploadArguments } = require("./lib/command");
 const { deleteArchiveFile } = require("./lib/delete");
 const { downloadFile } = require("./lib/download");
 const { directoryExists, ensureDirectory, listDirectory, localDirectoryToVirtualPath, normalizeVirtualPath, removeEmptyDirectory } = require("./lib/filesystem");
+const { collectFiles, uploadDirectory } = require("./lib/folder-upload");
 const { uploadFile } = require("./lib/upload");
 
 dotenv.config({ quiet: true });
@@ -145,6 +146,34 @@ async function handleCommand(command) {
             console.log(paint.green(`✓ Downloaded: ${outputPath}`));
             break;
         }
+        case "upload-folder": {
+            const { filePath: directoryPath, description } = parseUploadArguments(argumentText);
+            const { root, files } = await collectFiles(directoryPath);
+            if (files.length === 0) throw new Error("The selected directory contains no files.");
+            const defaultDirectory = currentDirectory === "/" ? localDirectoryToVirtualPath(root) : currentDirectory;
+            const destinationInput = await ask(paint.dim(`  Destination folder [${defaultDirectory}]: `));
+            const destinationDirectory = normalizeVirtualPath(destinationInput || defaultDirectory, currentDirectory);
+            const answer = await ask(paint.yellow(`  Upload ${files.length} file(s) from '${root}'? [y/N]: `));
+            if (answer.trim().toLowerCase() !== "y") {
+                console.log(paint.dim("Upload cancelled."));
+                break;
+            }
+            await uploadDirectory({
+                client,
+                files,
+                rootDirectory: root,
+                destinationDirectory,
+                key,
+                description,
+                onFile: async (entry, current, total, relativePath) => {
+                    entry.virtualPath = ensureDirectory(db, path.posix.dirname(entry.virtualPath));
+                    db.data.files.push(entry);
+                    await db.write();
+                    console.log(paint.green(`✓ [${current}/${total}] Uploaded: ${relativePath}`));
+                }
+            });
+            break;
+        }
         case "list":
             if (argumentText && !/^\d+$/.test(argumentText)) throw new Error("Usage: list [page]");
             showFiles(db.data.files, Number(argumentText || 1));
@@ -203,7 +232,7 @@ async function handleCommand(command) {
             break;
         }
         case "help":
-            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  rmdir <directory>                      Delete an empty archive directory\n  rm <file-id>                           Permanently delete a file and its Telegram parts\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
+            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  upload-folder <path> [--description <text>] Upload every file in a folder after confirmation\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  rmdir <directory>                      Delete an empty archive directory\n  rm <file-id>                           Permanently delete a file and its Telegram parts\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  upload-folder \"C:\\My Files\\Photos\" --description \"Holiday archive\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
             break;
         case "exit":
         case "quit":

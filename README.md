@@ -85,6 +85,7 @@ Run `help` inside TGDisk to see the available commands.
 | Command | Description |
 | --- | --- |
 | `upload <path> [--description <text>]` | Upload a file. TGDisk asks for its virtual archive folder. |
+| `upload-folder <path> [--description <text>]` | Scan a folder recursively, ask for confirmation, then upload each file while retaining the folder hierarchy. |
 | `download <id>` | Restore a file by its global file ID. |
 | `ls [directory]` | Show folders and files in the current archive directory. |
 | `cd <directory>` | Change the current virtual archive directory. Supports `.` and `..`. |
