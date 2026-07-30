@@ -9,6 +9,12 @@ It behaves like a small virtual disk: create archive folders, move between them 
 > [!WARNING]
 > Keep both your `MASTER_PASSWORD` and `db.json` safe. The password is required to decrypt files, and `db.json` maps archive records to the Telegram messages that contain their encrypted data. Do not commit either file to a public repository.
 
+## Use on multiple computers
+
+TGDisk keeps an encrypted copy of the archive index in your Telegram Saved Messages. Copy the same `.env` file to a second computer, start TGDisk, sign in to the same Telegram account when prompted, and the file list will be restored automatically. Files uploaded on one computer can then be listed and downloaded on the other.
+
+Before using a second computer, run this version of TGDisk once on the computer that already has the archive. That publishes its existing local index to Telegram. On the second computer, `.env` is enough; `db.json` does not need to be copied. You must complete Telegram's normal phone-code login the first time, after which that computer saves its own local session. Keep the same `MASTER_PASSWORD`, because the synced index and every archived file are encrypted with it. If a second computer has stale metadata and attempts to change the archive, TGDisk stops the change rather than overwriting newer data. Restart it to reload the latest index first.
+
 ## Features
 
 - Client-side gzip compression and AES-256-GCM encryption.
@@ -16,6 +22,7 @@ It behaves like a small virtual disk: create archive folders, move between them 
 - Automatic multipart uploads when encrypted data exceeds 200 MB.
 - Virtual archive folders saved in `db.json`.
 - File descriptions and paginated global archive listing.
+- Search, metadata inspection, and virtual file moves.
 - Safe deletion: files require confirmation and remove all of their Telegram parts; directories can only be deleted when empty.
 - Quiet Telegram client logs and readable command-line progress output.
 
@@ -89,6 +96,9 @@ Run `help` inside TGDisk to see the available commands.
 | `upload <path> [--description <text>]` | Upload a file. TGDisk asks for its virtual archive folder. |
 | `upload-folder <path> [--description <text>]` | Scan a folder recursively, ask for confirmation, then upload each file while retaining the folder hierarchy. |
 | `download <id>` | Restore a file by its global file ID. |
+| `info <id>` | Show the full metadata for one archive file. |
+| `find <text>` | Search names, descriptions, and virtual paths. |
+| `mv <file-id> <directory>` | Move a file to another virtual archive directory. |
 | `ls [directory]` | Show folders and files in the current archive directory. |
 | `cd <directory>` | Change the current virtual archive directory. Supports `.` and `..`. |
 | `pwd` | Print the current virtual archive directory. |
@@ -125,6 +135,14 @@ list 1
 list 2
 ```
 
+Search and organize existing files:
+
+```text
+find invoice
+mv 3 /documents/2026
+info 3
+```
+
 ## UI-ready WebSocket mode
 
 TGDisk can also expose the same archive commands through a local WebSocket server. This is intended for a future desktop or web UI; it stays bound to `127.0.0.1`, so it is not reachable from other devices by default.
@@ -141,7 +159,15 @@ Connect to `ws://127.0.0.1:8787` (or the port you choose). Send a command as JSO
 { "type": "command", "id": "request-1", "command": "ls" }
 ```
 
-The server returns `ready`, `event`, `prompt`, and `result` messages. `prompt` is used for destination-folder and destructive-action confirmations; reply with `{ "type": "answer", "requestId": "...", "value": "..." }`. Command results are structured JSON, making it possible for a UI to render folders, files, progress, and errors without parsing terminal output. Operations are serialized across connected clients to protect the archive database.
+The server listens only on `127.0.0.1`, limits a message to 64 KB, and returns `ready`, `event`, `prompt`, and `result` messages. `prompt` is used for destination-folder and destructive-action confirmations; reply with `{ "type": "answer", "requestId": "...", "value": "..." }`. Command results are structured JSON, making it possible for a UI to render folders, files, progress, and errors without parsing terminal output. Operations are serialized across connected clients to protect the archive database. A confirmation prompt expires after five minutes if the UI disconnects or does not answer.
+
+For browser-based UIs, set a token in `.env` before starting the server:
+
+```env
+TGDISK_WS_TOKEN=a-long-random-local-token
+```
+
+When configured, the client must send `{ "type": "authenticate", "token": "..." }` after `ready` and before any command.
 
 ## Storage Format and Multipart Files
 

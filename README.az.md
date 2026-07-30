@@ -9,6 +9,12 @@ Proqram kiçik virtual disk kimi işləyir: arxiv qovluqları yarada, `cd` ilə 
 > [!WARNING]
 > `MASTER_PASSWORD` və `db.json` faylını təhlükəsiz saxlayın. Şifrə faylları açmaq üçün, `db.json` isə arxiv qeydlərini Telegram mesajları ilə əlaqələndirmək üçün lazımdır. Bunları açıq repozitoriyaya əlavə etməyin.
 
+## Bir neçə kompüterdə istifadə
+
+TGDisk arxiv indeksinin şifrələnmiş nüsxəsini Telegram-dakı Saved Messages bölməsində saxlayır. Eyni `.env` faylını ikinci kompüterə köçürün, TGDisk-i başladın, soruşulduqda eyni Telegram hesabına daxil olun və fayl siyahısı avtomatik bərpa ediləcək. Beləliklə, bir kompüterdə yüklənən fayllar digər kompüterdə siyahıda görünəcək və endirilə biləcək.
+
+İkinci kompüterdən istifadə etməzdən əvvəl, arxivin olduğu kompüterdə TGDisk-in bu versiyasını bir dəfə başladın. Bu, mövcud lokal indeksi Telegram-a göndərir. İkinci kompüterdə `.env` faylı kifayətdir; `db.json`-u köçürmək lazım deyil. İlk dəfə Telegram-ın adi telefon kodu ilə girişini tamamlamalısınız; bundan sonra həmin kompüter öz lokal sessiyasını saxlayacaq. Eyni `MASTER_PASSWORD` istifadə olunmalıdır, çünki sinxron indeks və bütün arxiv faylları onunla şifrələnir. İkinci kompüterdə köhnə indeks qalıbsa və arxivdə dəyişiklik etməyə çalışarsa, TGDisk yeni məlumatın üzərinə yazmaq əvəzinə əməliyyatı dayandırır. Ən son indeksi yükləmək üçün proqramı yenidən başladın.
+
 ## İmkanlar
 
 - Lokal gzip sıxılması və AES-256-GCM şifrələməsi.
@@ -16,6 +22,7 @@ Proqram kiçik virtual disk kimi işləyir: arxiv qovluqları yarada, `cd` ilə 
 - Şifrələnmiş məlumat 200 MB-dan böyük olduqda avtomatik hissələrə bölünmə.
 - `db.json` daxilində virtual arxiv qovluqları.
 - Fayl açıqlamaları və səhifələnmiş ümumi arxiv siyahısı.
+- Fayl axtarışı, metadata görünüşü və virtual qovluqlar arasında köçürmə.
 - Təhlükəsiz silmə: fayllar təsdiq tələb edir və bütün Telegram hissələri silinir; qovluqlar yalnız boş olduqda silinə bilər.
 - Səssiz Telegram qeydləri və oxunaqlı tərəqqi göstəriciləri.
 
@@ -89,6 +96,9 @@ Proqram daxilində `help` yazaraq əmrləri görə bilərsiniz.
 | `upload <path> [--description <text>]` | Faylı yükləyir və virtual arxiv qovluğunu soruşur. |
 | `upload-folder <path> [--description <text>]` | Qovluğu rekursiv oxuyur, təsdiq istəyir və iyerarxiyanı saxlayaraq bütün faylları yükləyir. |
 | `download <id>` | Faylı ümumi ID-si ilə bərpa edir. |
+| `info <id>` | Bir arxiv faylının tam metadatasını göstərir. |
+| `find <text>` | Fayl adlarında, açıqlamalarda və virtual yollarda axtarır. |
+| `mv <file-id> <directory>` | Faylı başqa virtual arxiv qovluğuna köçürür. |
 | `ls [directory]` | Cari arxiv qovluğundakı qovluq və faylları göstərir. |
 | `cd <directory>` | Virtual qovluğu dəyişir. `.` və `..` dəstəklənir. |
 | `pwd` | Cari virtual qovluğu göstərir. |
@@ -125,6 +135,14 @@ list 1
 list 2
 ```
 
+Mövcud faylları axtarmaq və nizamlamaq:
+
+```text
+find invoice
+mv 3 /documents/2026
+info 3
+```
+
 ## UI üçün WebSocket rejimi
 
 TGDisk eyni arxiv əmrlərini lokal WebSocket serveri vasitəsilə də təqdim edə bilər. Bu rejim gələcək masaüstü və ya veb interfeys üçündür. Server yalnız `127.0.0.1` ünvanına bağlandığı üçün standart olaraq digər cihazlardan əlçatan deyil.
@@ -141,7 +159,15 @@ Standart port üçün `ws://127.0.0.1:8787` ünvanına qoşulun. Əmri JSON kimi
 { "type": "command", "id": "request-1", "command": "ls" }
 ```
 
-Server `ready`, `event`, `prompt` və `result` mesajları göndərir. `prompt` təyinat qovluğu və silmə təsdiqi üçün istifadə olunur. Cavab olaraq `{ "type": "answer", "requestId": "...", "value": "..." }` göndərin. Nəticələr strukturlaşdırılmış JSON olduğuna görə UI qovluqları, faylları, tərəqqini və xətaları terminal çıxışını təhlil etmədən göstərə bilər. Arxiv verilənlər bazasını qorumaq üçün bütün əməliyyatlar qoşulmuş müştərilər arasında ardıcıl icra edilir.
+Server yalnız `127.0.0.1` ünvanında dinləyir, mesaj ölçüsünü 64 KB ilə məhdudlaşdırır və `ready`, `event`, `prompt`, `result` mesajları göndərir. `prompt` təyinat qovluğu və silmə təsdiqi üçün istifadə olunur. Cavab olaraq `{ "type": "answer", "requestId": "...", "value": "..." }` göndərin. Nəticələr strukturlaşdırılmış JSON olduğuna görə UI qovluqları, faylları, tərəqqini və xətaları terminal çıxışını təhlil etmədən göstərə bilər. Arxiv verilənlər bazasını qorumaq üçün bütün əməliyyatlar qoşulmuş müştərilər arasında ardıcıl icra edilir. UI bağlantısı kəsilərsə və ya beş dəqiqə cavab verməzsə, təsdiq sorğusu qüvvədən düşür.
+
+Brauzer əsaslı UI üçün serveri başlamazdan əvvəl `.env` faylında token təyin edin:
+
+```env
+TGDISK_WS_TOKEN=uzun-tesadufi-lokal-token
+```
+
+Token təyin edilərsə, müştəri `ready` mesajından sonra və əmrdən əvvəl `{ "type": "authenticate", "token": "..." }` göndərməlidir.
 
 ## Saxlama formatı və çoxhissəli fayllar
 

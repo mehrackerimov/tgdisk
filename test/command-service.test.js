@@ -29,3 +29,14 @@ test("command service delegates confirmations to the presentation layer", async 
     assert.equal(result.directory, "/empty");
     assert.equal(prompts[0].type, "confirm");
 });
+
+test("command service searches, identifies, and moves archive entries", async () => {
+    const database = createDatabase();
+    database.data.files.push({ name: "invoice.pdf", description: "April expenses", virtualPath: "/inbox", parts: [] });
+    const service = createCommandService({ client: {}, key: Buffer.alloc(32), getDatabase: async () => database });
+
+    assert.equal((await service.execute("find april")).files[0].id, 0);
+    assert.equal((await service.execute("info 0")).file.name, "invoice.pdf");
+    assert.equal((await service.execute("mv 0 accounting/2026")).file.virtualPath, "/accounting/2026");
+    assert.equal(database.writes, 1);
+});

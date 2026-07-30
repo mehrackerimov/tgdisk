@@ -22,3 +22,24 @@ test("WebSocket server accepts commands and returns JSON results", async (t) => 
     socket.close();
     assert.deepEqual(messages.at(-1), { type: "result", id: "one", ok: true, result: { echoed: "pwd" } });
 });
+
+test("WebSocket server requires the configured token before commands", async (t) => {
+    const server = startWebSocketServer({ port: 0, token: "test-token", createSession: () => ({ execute: async () => ({ ok: true }) }) });
+    await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const socket = new WebSocket(`ws://127.0.0.1:${server.address().port}`);
+    const messages = [];
+    await new Promise((resolve, reject) => {
+        socket.once("error", reject);
+        socket.on("message", (raw) => {
+            const message = JSON.parse(raw);
+            messages.push(message);
+            if (message.type === "ready") socket.send(JSON.stringify({ type: "authenticate", token: "test-token" }));
+            if (message.type === "authenticated") socket.send(JSON.stringify({ type: "command", id: "one", command: "pwd" }));
+            if (message.type === "result") resolve();
+        });
+    });
+    socket.close();
+    assert.equal(messages[0].authenticationRequired, true);
+    assert.equal(messages.at(-1).ok, true);
+});

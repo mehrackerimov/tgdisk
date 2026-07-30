@@ -13,9 +13,11 @@ const { collectFiles, uploadDirectory } = require("./lib/folder-upload");
 const { uploadFile } = require("./lib/upload");
 const { createCommandService } = require("./lib/command-service");
 const { startWebSocketServer } = require("./lib/websocket-server");
+const { restoreArchiveIndex, syncArchiveIndex } = require("./lib/archive-sync");
 
 dotenv.config({ quiet: true });
 
+validateConfiguration();
 const key = crypto.scryptSync(process.env.MASTER_PASSWORD, "tgdisk", 32);
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 let client;
@@ -95,8 +97,20 @@ async function getDatabase() {
     return database;
 }
 
+async function saveArchiveDatabase(database) {
+    await syncArchiveIndex({ client, key, database });
+}
+
 function ask(question) {
     return new Promise((resolve) => rl.question(question, resolve));
+}
+
+function validateConfiguration() {
+    if (!process.env.MASTER_PASSWORD) throw new Error("MASTER_PASSWORD is missing. Add it to .env before starting TGDisk.");
+    if (!/^\d+$/.test(process.env.APP_ID || "") || Number(process.env.APP_ID) <= 0) {
+        throw new Error("APP_ID must be a positive Telegram API ID in .env.");
+    }
+    if (!process.env.API_HASH) throw new Error("API_HASH is missing. Add it to .env before starting TGDisk.");
 }
 
 async function handleCommand(command) {
@@ -129,7 +143,7 @@ async function handleCommand(command) {
             process.stdout.write("\n");
             entry.virtualPath = ensureDirectory(db, destinationDirectory);
             db.data.files.push(entry);
-            await db.write();
+            await saveArchiveDatabase(db);
             console.log(paint.green(`✓ Uploaded to ${entry.virtualPath}: ${entry.name} (${formatSize(entry.size)})`));
             break;
         }
@@ -170,7 +184,7 @@ async function handleCommand(command) {
                 onFile: async (entry, current, total, relativePath) => {
                     entry.virtualPath = ensureDirectory(db, path.posix.dirname(entry.virtualPath));
                     db.data.files.push(entry);
-                    await db.write();
+                    await saveArchiveDatabase(db);
                     console.log(paint.green(`✓ [${current}/${total}] Uploaded: ${relativePath}`));
                 }
             });
@@ -196,11 +210,38 @@ async function handleCommand(command) {
         case "pwd":
             console.log(currentDirectory);
             break;
+        case "info": {
+            if (!/^\d+$/.test(argumentText)) throw new Error("Usage: info <file-id>");
+            const file = db.data.files[Number(argumentText)];
+            if (!file) throw new Error("No file exists with this ID.");
+            console.log(JSON.stringify(file, null, 2));
+            break;
+        }
+        case "find": {
+            if (!argumentText) throw new Error("Usage: find <text>");
+            const query = argumentText.toLocaleLowerCase();
+            const matches = db.data.files
+                .map((file, id) => ({ file, id }))
+                .filter(({ file }) => [file.name, file.description, file.virtualPath].some((value) => String(value || "").toLocaleLowerCase().includes(query)));
+            if (matches.length === 0) console.log(paint.yellow("No matching files found."));
+            for (const { file, id } of matches) console.log(`  ${String(id).padStart(4)}  ${file.name} ${paint.dim(`(${file.virtualPath || "/"})`)}`);
+            break;
+        }
+        case "mv": {
+            const match = /^(\d+)\s+(.+)$/.exec(argumentText);
+            if (!match) throw new Error("Usage: mv <file-id> <directory>");
+            const file = db.data.files[Number(match[1])];
+            if (!file) throw new Error("No file exists with this ID.");
+            file.virtualPath = ensureDirectory(db, normalizeVirtualPath(match[2], currentDirectory));
+            await saveArchiveDatabase(db);
+            console.log(paint.green(`âœ“ Moved: ${file.name} → ${file.virtualPath}`));
+            break;
+        }
         case "mkdir": {
             if (!argumentText) throw new Error("Usage: mkdir <directory>");
             const target = normalizeVirtualPath(argumentText, currentDirectory);
             ensureDirectory(db, target);
-            await db.write();
+            await saveArchiveDatabase(db);
             console.log(paint.green(`✓ Directory created: ${target}`));
             break;
         }
@@ -215,7 +256,7 @@ async function handleCommand(command) {
                 break;
             }
             await deleteArchiveFile({ client, database: db, fileId });
-            await db.write();
+            await saveArchiveDatabase(db);
             console.log(paint.green(`✓ Deleted: ${file.name}`));
             break;
         }
@@ -228,13 +269,13 @@ async function handleCommand(command) {
                 break;
             }
             removeEmptyDirectory(db, target);
-            await db.write();
+            await saveArchiveDatabase(db);
             if (currentDirectory === target) currentDirectory = "/";
             console.log(paint.green(`✓ Directory deleted: ${target}`));
             break;
         }
         case "help":
-            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  upload-folder <path> [--description <text>] Upload every file in a folder after confirmation\n  download <id>                          Download a file by ID\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  rmdir <directory>                      Delete an empty archive directory\n  rm <file-id>                           Permanently delete a file and its Telegram parts\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  upload-folder \"C:\\My Files\\Photos\" --description \"Holiday archive\"\n  cd /C:/Users/mehra/Documents\n  ls\n");
+            console.log("\n  upload <path> [--description <text>]  Upload a file and choose its archive folder\n  upload-folder <path> [--description <text>] Upload every file in a folder after confirmation\n  download <id>                          Download a file by ID\n  info <id>                              Show all metadata for a file\n  find <text>                            Search file names, descriptions, and folders\n  mv <file-id> <directory>               Move a file in the virtual archive\n  ls [directory]                         List folders and files in the current archive directory\n  cd <directory>                         Change archive directory\n  pwd                                    Print current archive directory\n  mkdir <directory>                      Create an archive directory\n  rmdir <directory>                      Delete an empty archive directory\n  rm <file-id>                           Permanently delete a file and its Telegram parts\n  list [page]                            Browse every file by pages\n  exit                                   Close TGDisk\n\n  Examples:\n  upload \"C:\\My Files\\report.pdf\" --description \"Quarterly report\"\n  find report\n  mv 3 /projects/2026\n");
             break;
         case "exit":
         case "quit":
@@ -274,8 +315,12 @@ function prompt() {
         password: () => new Promise((resolve) => rl.question("Two-factor password: ", resolve)),
         phoneCode: () => new Promise((resolve) => rl.question("Telegram code: ", resolve))
     });
+    if (!startupDatabase.data.archiveIndexInitialized) {
+        await restoreArchiveIndex({ client, key, database: startupDatabase });
+    }
     startupDatabase.data.session = client.session.save();
     await startupDatabase.write();
+    if (!startupDatabase.data.archiveIndexInitialized) await syncArchiveIndex({ client, key, database: startupDatabase });
     const websocketFlag = process.argv.indexOf("--ws");
     if (websocketFlag !== -1) {
         const requestedPort = process.argv[websocketFlag + 1];
@@ -283,7 +328,8 @@ function prompt() {
         if (port < 1 || port > 65535) throw new Error("WebSocket port must be between 1 and 65535.");
         startWebSocketServer({
             port,
-            createSession: () => createCommandService({ client, key, getDatabase })
+            token: process.env.TGDISK_WS_TOKEN,
+            createSession: () => createCommandService({ client, key, getDatabase, saveDatabase: saveArchiveDatabase })
         });
         rl.close();
         console.log(`TGDisk WebSocket server listening on ws://127.0.0.1:${port}`);
